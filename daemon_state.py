@@ -11,6 +11,8 @@ class RobotStatus:
     right: float = 0.0
     mode: str = "idle"
     battery_pct: float | None = None
+    battery_voltage_v: float | None = None
+    battery_ready: bool = False
     camera_ready: bool = False
     motors_ready: bool = False
 

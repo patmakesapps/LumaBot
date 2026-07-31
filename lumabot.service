@@ -1,0 +1,19 @@
+[Unit]
+Description=LumaBot Hardware Daemon
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=lumabot21
+WorkingDirectory=/home/lumabot21/lumabot
+Environment=LUMABOT_MOTORS_ENABLED=1
+Environment=LUMABOT_BATTERY_ENABLED=1
+ExecStart=/home/lumabot21/lumabot/.venv/bin/python server.py
+Restart=on-failure
+RestartSec=2
+KillSignal=SIGINT
+TimeoutStopSec=5
+
+[Install]
+WantedBy=multi-user.target

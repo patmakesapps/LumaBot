@@ -4,23 +4,56 @@ import json
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from daemon import LumaBotDaemon
+from motors import MotorsNotReady
 
 
 DAEMON = LumaBotDaemon()
 
 
 class RequestHandler(BaseHTTPRequestHandler):
+    def _send_json(self, status: int, payload: dict) -> None:
+        body = json.dumps(payload).encode("utf-8")
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _read_json(self) -> dict:
+        length = int(self.headers.get("Content-Length", "0"))
+        if length > 4096:
+            raise ValueError("request body is too large")
+        return json.loads(self.rfile.read(length) or b"{}")
+
     def do_GET(self) -> None:
         if self.path != "/status":
             self.send_error(404)
             return
 
-        body = json.dumps(DAEMON.get_status()).encode("utf-8")
-        self.send_response(200)
-        self.send_header("Content-Type", "application/json")
-        self.send_header("Content-Length", str(len(body)))
-        self.end_headers()
-        self.wfile.write(body)
+        self._send_json(200, DAEMON.get_status())
+
+    def do_POST(self) -> None:
+        if self.path == "/stop":
+            self._send_json(200, {"stopped": True, "status": DAEMON.stop()})
+            return
+        if self.path != "/drive":
+            self._send_json(404, {"error": "not found"})
+            return
+
+        try:
+            data = self._read_json()
+            result = DAEMON.drive(
+                data.get("direction"),
+                data.get("speed"),
+                data.get("duration_s"),
+            )
+        except (TypeError, ValueError) as error:
+            self._send_json(400, {"error": str(error)})
+            return
+        except MotorsNotReady as error:
+            self._send_json(409, {"error": str(error)})
+            return
+        self._send_json(202, {"accepted": True, **result})
 
 
 def serve() -> None:
@@ -31,6 +64,7 @@ def serve() -> None:
     except KeyboardInterrupt:
         print("\nStopping LumaBot daemon.")
     finally:
+        DAEMON.stop()
         server.server_close()
 
 

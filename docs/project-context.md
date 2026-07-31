@@ -2,6 +2,23 @@
 
 Updated July 14, 2026.
 
+## Prototype status — July 30, 2026
+
+- The current repository is <https://github.com/patmakesapps/LumaBot>.
+- The Waveshare board was replaced by an Adafruit Motor Bonnet at `0x60`.
+- Motor 1 is the left wheel (software-inverted); motor 4 is the right wheel.
+- Bench tests confirmed semantic forward motion on both wheels.
+- `lumabot.service` runs `server.py` automatically on `127.0.0.1:8971`.
+- Its `/drive` endpoint uses leases of at most three seconds and always coasts
+  the motors when a lease expires, the service stops, or an error occurs.
+- The X1200 fuel gauge at `0x36` reports percentage and voltage through
+  `/status`.
+- LumaKit calls this local API through LLM-selected structured tools. It can
+  schedule a single movement or an ordered sequence without parsing phrases.
+- The camera and VL53L1X are not currently connected. Obstacle safety is
+  therefore explicitly reported as inactive; all movement testing is on a
+  raised-wheel bench.
+
 ## Goal
 
 Build a small entertainment-focused differential-drive desk companion that:
