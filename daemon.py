@@ -89,7 +89,10 @@ class LumaBotDaemon:
                 self.status.battery_pct = battery["battery_pct"]
                 self.status.battery_voltage_v = battery["battery_voltage_v"]
                 self.status.battery_ready = battery["battery_pct"] is not None
-                self.indicator.update_battery(battery["battery_pct"])
+                self.indicator.update_battery(
+                    battery["battery_pct"],
+                    battery["battery_voltage_v"],
+                )
             except OSError:
                 self.status.battery_pct = None
                 self.status.battery_voltage_v = None

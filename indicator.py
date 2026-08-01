@@ -1,6 +1,5 @@
 """NeoSlider status lighting for battery level and LumaKit activity."""
 
-import colorsys
 import math
 import threading
 import time
@@ -8,18 +7,18 @@ import time
 
 OFF = (0, 0, 0)
 RED = (255, 0, 0)
+GREEN = (0, 255, 0)
 PURPLE = (160, 0, 255)
 LOW_BATTERY_PCT = 15.0
 CRITICAL_BATTERY_PCT = 5.0
+LOW_BATTERY_V = 3.55
+CRITICAL_BATTERY_V = 3.4
 
 
 def battery_color(percent: float) -> tuple[int, int, int]:
-    """Return red at 15% and below, smoothly reaching green at 100%."""
+    """Return red at 15% and below; otherwise use a steady green."""
     percent = max(0.0, min(100.0, float(percent)))
-    if percent <= LOW_BATTERY_PCT:
-        return RED
-    hue = ((percent - LOW_BATTERY_PCT) / (100.0 - LOW_BATTERY_PCT)) / 3.0
-    return tuple(round(channel * 255) for channel in colorsys.hsv_to_rgb(hue, 1.0, 1.0))
+    return RED if percent <= LOW_BATTERY_PCT else GREEN
 
 
 def scale_color(color: tuple[int, int, int], level: float) -> tuple[int, int, int]:
@@ -63,6 +62,7 @@ class IndicatorController:
     FRAME_S = 0.05
     INIT_ATTEMPTS = 3
     INIT_RETRY_S = 0.25
+    STARTUP_PULSE_S = 8.0
     LEASE_MIN_S = 1.0
     LEASE_MAX_S = 30.0
 
@@ -74,6 +74,7 @@ class IndicatorController:
         pixels=None,
         clock=time.monotonic,
         autostart: bool = True,
+        startup_pulse_s: float = STARTUP_PULSE_S,
     ):
         self._battery = battery
         self._clock = clock
@@ -83,6 +84,8 @@ class IndicatorController:
         self._thread = None
         self._pixels = None
         self._battery_pct = None
+        self._battery_voltage_v = None
+        self._startup_until = self._clock() + max(0.0, float(startup_pulse_s))
         self._leases: dict[str, float] = {}
         self.ready = False
 
@@ -112,18 +115,23 @@ class IndicatorController:
             )
             self._thread.start()
 
-    def update_battery(self, percent) -> None:
+    def update_battery(self, percent, voltage_v=None) -> None:
         if isinstance(percent, bool) or not isinstance(percent, (int, float)):
             return
         with self._lock:
             self._battery_pct = max(0.0, min(100.0, float(percent)))
+            if not isinstance(voltage_v, bool) and isinstance(voltage_v, (int, float)):
+                self._battery_voltage_v = float(voltage_v)
 
     def refresh_battery(self) -> None:
         try:
             reading = self._battery.read()
         except Exception:
             return
-        self.update_battery(reading.get("battery_pct"))
+        self.update_battery(
+            reading.get("battery_pct"),
+            reading.get("battery_voltage_v"),
+        )
 
     def set_activity(
         self,
@@ -165,12 +173,25 @@ class IndicatorController:
         }
         if not self.ready:
             return "unavailable" if self._enabled else "disabled"
-        if self._battery_pct is not None and self._battery_pct <= CRITICAL_BATTERY_PCT:
+        voltage = self._battery_voltage_v
+        critical_voltage = voltage is None or voltage <= CRITICAL_BATTERY_V
+        low_voltage = voltage is None or voltage <= LOW_BATTERY_V
+        if (
+            self._battery_pct is not None
+            and self._battery_pct <= CRITICAL_BATTERY_PCT
+            and critical_voltage
+        ):
             return "critical_battery"
-        if self._battery_pct is not None and self._battery_pct <= LOW_BATTERY_PCT:
+        if (
+            self._battery_pct is not None
+            and self._battery_pct <= LOW_BATTERY_PCT
+            and low_voltage
+        ):
             return "low_battery"
         if self._leases:
             return "thinking"
+        if now < self._startup_until:
+            return "startup"
         if self._battery_pct is not None:
             return "battery"
         return "unavailable"
@@ -188,8 +209,11 @@ class IndicatorController:
         elif mode == "thinking":
             wave = (math.sin((2.0 * math.pi * now / 1.5) - math.pi / 2.0) + 1.0) / 2.0
             color = scale_color(PURPLE, 0.2 + 0.8 * wave)
+        elif mode == "startup":
+            wave = (math.sin((2.0 * math.pi * now / 1.5) - math.pi / 2.0) + 1.0) / 2.0
+            color = scale_color(GREEN, 0.2 + 0.8 * wave)
         elif mode == "battery":
-            color = battery_color(percent)
+            color = GREEN
         else:
             return OFF
 

@@ -3,7 +3,7 @@
 import unittest
 from unittest import mock
 
-from indicator import IndicatorController, OFF, PURPLE, RED, battery_color
+from indicator import GREEN, IndicatorController, OFF, PURPLE, RED, battery_color
 
 
 class FakeClock:
@@ -44,16 +44,50 @@ class IndicatorTests(unittest.TestCase):
             pixels=self.pixels,
             clock=self.clock,
             autostart=False,
+            startup_pulse_s=0,
         )
 
     def tearDown(self):
         self.indicator.close()
 
-    def test_battery_gradient_reaches_red_at_fifteen_percent(self):
-        self.assertEqual(battery_color(100), (0, 255, 0))
-        self.assertEqual(battery_color(57.5), (255, 255, 0))
+    def test_battery_color_is_green_until_fifteen_percent(self):
+        self.assertEqual(battery_color(100), GREEN)
+        self.assertEqual(battery_color(20), GREEN)
+        self.assertEqual(battery_color(15.01), GREEN)
         self.assertEqual(battery_color(15), RED)
         self.assertEqual(battery_color(0), RED)
+
+    def test_voltage_prevents_premature_red_warning(self):
+        self.indicator.update_battery(10, 3.61)
+        self.assertEqual(self.indicator.get_status()["indicator_mode"], "battery")
+        color = self.indicator.render_frame(0.0)
+        self.assertEqual(color, GREEN)
+
+        self.indicator.update_battery(15, 3.55)
+        self.assertEqual(self.indicator.get_status()["indicator_mode"], "low_battery")
+        self.indicator.update_battery(5, 3.45)
+        self.assertEqual(self.indicator.get_status()["indicator_mode"], "low_battery")
+        self.indicator.update_battery(5, 3.4)
+        self.assertEqual(self.indicator.get_status()["indicator_mode"], "critical_battery")
+
+    def test_startup_pulses_green_then_becomes_steady(self):
+        indicator = IndicatorController(
+            FakeBattery(),
+            enabled=True,
+            pixels=FakePixels(),
+            clock=self.clock,
+            autostart=False,
+            startup_pulse_s=8,
+        )
+        indicator.update_battery(75, 3.9)
+
+        self.assertEqual(indicator.get_status()["indicator_mode"], "startup")
+        self.assertNotEqual(indicator.render_frame(0.0), GREEN)
+        self.assertEqual(indicator.render_frame(0.75), GREEN)
+        self.clock.now = 8
+        self.assertEqual(indicator.get_status()["indicator_mode"], "battery")
+        self.assertEqual(indicator.render_frame(), GREEN)
+        indicator.close()
 
     def test_low_and_critical_battery_override_thinking(self):
         self.indicator.update_battery(75)

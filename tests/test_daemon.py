@@ -26,11 +26,13 @@ class FakeBattery:
 class FakeIndicator:
     def __init__(self):
         self.battery_pct = None
+        self.battery_voltage_v = None
         self.activities = []
         self.closed = False
 
-    def update_battery(self, percent):
+    def update_battery(self, percent, voltage_v=None):
         self.battery_pct = percent
+        self.battery_voltage_v = voltage_v
 
     def get_status(self):
         return {"indicator_ready": True, "indicator_mode": "battery"}
@@ -67,6 +69,7 @@ class DaemonTests(unittest.TestCase):
         self.assertEqual(status["battery_voltage_v"], 3.9)
         self.assertTrue(status["battery_ready"])
         self.assertEqual(self.indicator.battery_pct, 75.0)
+        self.assertEqual(self.indicator.battery_voltage_v, 3.9)
         self.assertTrue(status["indicator_ready"])
 
     def test_indicator_activity_is_forwarded(self):
