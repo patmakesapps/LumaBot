@@ -1,5 +1,7 @@
 """Read the X1200's MAX17040-compatible fuel gauge at I2C address 0x36."""
 
+import threading
+
 from smbus2 import SMBus
 
 
@@ -8,14 +10,16 @@ class BatteryGauge:
         self.enabled = enabled
         self.bus_number = bus_number
         self.address = address
+        self._lock = threading.Lock()
 
     def read(self) -> dict:
         if not self.enabled:
             return {"battery_pct": None, "battery_voltage_v": None}
 
-        with SMBus(self.bus_number) as bus:
-            voltage_bytes = bus.read_i2c_block_data(self.address, 0x02, 2)
-            percent_bytes = bus.read_i2c_block_data(self.address, 0x04, 2)
+        with self._lock:
+            with SMBus(self.bus_number) as bus:
+                voltage_bytes = bus.read_i2c_block_data(self.address, 0x02, 2)
+                percent_bytes = bus.read_i2c_block_data(self.address, 0x04, 2)
 
         voltage_raw = ((voltage_bytes[0] << 8) | voltage_bytes[1]) >> 4
         voltage_v = voltage_raw * 0.00125

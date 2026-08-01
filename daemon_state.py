@@ -13,6 +13,8 @@ class RobotStatus:
     battery_pct: float | None = None
     battery_voltage_v: float | None = None
     battery_ready: bool = False
+    indicator_ready: bool = False
+    indicator_mode: str = "disabled"
     camera_ready: bool = False
     motors_ready: bool = False
 

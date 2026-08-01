@@ -6,6 +6,7 @@ import time
 
 from battery import BatteryGauge
 from daemon_state import RobotStatus
+from indicator import IndicatorController
 from motors import MotorController
 
 
@@ -23,6 +24,7 @@ class LumaBotDaemon:
         self,
         motors: MotorController | None = None,
         battery: BatteryGauge | None = None,
+        indicator: IndicatorController | None = None,
     ):
         self._started_at = time.monotonic()
         # stop() returns a fresh status snapshot while it still owns this lock.
@@ -32,6 +34,11 @@ class LumaBotDaemon:
         self.motors.coast()
         battery_enabled = os.getenv("LUMABOT_BATTERY_ENABLED") == "1"
         self.battery = battery or BatteryGauge(enabled=battery_enabled)
+        indicator_enabled = os.getenv("LUMABOT_INDICATOR_ENABLED") == "1"
+        self.indicator = indicator or IndicatorController(
+            self.battery,
+            enabled=indicator_enabled,
+        )
         self.status = RobotStatus(motors_ready=self.motors.ready)
         self._stop_timer: threading.Timer | None = None
 
@@ -82,10 +89,21 @@ class LumaBotDaemon:
                 self.status.battery_pct = battery["battery_pct"]
                 self.status.battery_voltage_v = battery["battery_voltage_v"]
                 self.status.battery_ready = battery["battery_pct"] is not None
+                self.indicator.update_battery(battery["battery_pct"])
             except OSError:
                 self.status.battery_pct = None
                 self.status.battery_voltage_v = None
                 self.status.battery_ready = False
+            indicator = self.indicator.get_status()
+            self.status.indicator_ready = indicator["indicator_ready"]
+            self.status.indicator_mode = indicator["indicator_mode"]
             snapshot = self.status.snapshot()
         snapshot["uptime_s"] = round(time.monotonic() - self._started_at, 1)
         return snapshot
+
+    def set_indicator_activity(self, lease_id: str, active: bool, ttl_s: float) -> dict:
+        return self.indicator.set_activity(lease_id, active, ttl_s)
+
+    def close(self) -> None:
+        self.stop()
+        self.indicator.close()

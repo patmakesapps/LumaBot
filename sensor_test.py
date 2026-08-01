@@ -5,7 +5,7 @@ import adafruit_vl53l1x
 
 
 i2c = board.I2C()
-sensor = adafruit_vl53l1x.VL53L1X(i2c)
+sensor = adafruit_vl53l1x.VL53L1X(i2c, address=0x29)
 
 # Short-distance mode with a 100 ms measurement budget.
 sensor.distance_mode = 1
@@ -31,3 +31,4 @@ except KeyboardInterrupt:
 
 finally:
     sensor.stop_ranging()
+    i2c.deinit()

@@ -36,6 +36,21 @@ class RequestHandler(BaseHTTPRequestHandler):
         if self.path == "/stop":
             self._send_json(200, {"stopped": True, "status": DAEMON.stop()})
             return
+        if self.path == "/indicator/activity":
+            try:
+                data = self._read_json()
+                if not isinstance(data, dict):
+                    raise ValueError("request body must be a JSON object")
+                result = DAEMON.set_indicator_activity(
+                    data.get("lease_id"),
+                    data.get("active"),
+                    data.get("ttl_s", 10.0),
+                )
+            except (TypeError, ValueError) as error:
+                self._send_json(400, {"error": str(error)})
+                return
+            self._send_json(200, result)
+            return
         if self.path != "/drive":
             self._send_json(404, {"error": "not found"})
             return
@@ -64,7 +79,7 @@ def serve() -> None:
     except KeyboardInterrupt:
         print("\nStopping LumaBot daemon.")
     finally:
-        DAEMON.stop()
+        DAEMON.close()
         server.server_close()
 
 
