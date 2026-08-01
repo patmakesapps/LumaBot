@@ -3,7 +3,7 @@
 import json
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from daemon import LumaBotDaemon
+from daemon import AutonomyUnavailable, LumaBotDaemon, ObstacleSafetyError
 from motors import MotorsNotReady
 
 
@@ -51,6 +51,21 @@ class RequestHandler(BaseHTTPRequestHandler):
                 return
             self._send_json(200, result)
             return
+        if self.path == "/autonomy":
+            try:
+                data = self._read_json()
+                if not isinstance(data, dict) or not isinstance(data.get("active"), bool):
+                    raise ValueError("active must be true or false")
+                if data["active"]:
+                    result = DAEMON.start_autonomy(source="api")
+                    self._send_json(202, {"accepted": True, "status": result})
+                else:
+                    self._send_json(200, {"stopped": True, "status": DAEMON.stop()})
+            except (TypeError, ValueError) as error:
+                self._send_json(400, {"error": str(error)})
+            except AutonomyUnavailable as error:
+                self._send_json(409, {"error": str(error)})
+            return
         if self.path != "/drive":
             self._send_json(404, {"error": "not found"})
             return
@@ -66,6 +81,9 @@ class RequestHandler(BaseHTTPRequestHandler):
             self._send_json(400, {"error": str(error)})
             return
         except MotorsNotReady as error:
+            self._send_json(409, {"error": str(error)})
+            return
+        except ObstacleSafetyError as error:
             self._send_json(409, {"error": str(error)})
             return
         self._send_json(202, {"accepted": True, **result})

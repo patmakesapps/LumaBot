@@ -3,7 +3,7 @@
 import unittest
 from unittest import mock
 
-from indicator import GREEN, IndicatorController, OFF, PURPLE, RED, battery_color
+from indicator import CYAN, GREEN, ORANGE, IndicatorController, OFF, PURPLE, RED, battery_color
 
 
 class FakeClock:
@@ -113,6 +113,25 @@ class IndicatorTests(unittest.TestCase):
         self.assertEqual(self.indicator.get_status()["indicator_mode"], "thinking")
         self.indicator.set_activity("run-b", False)
         self.assertEqual(self.indicator.get_status()["indicator_mode"], "battery")
+
+    def test_autonomous_and_transient_event_colors(self):
+        self.indicator.update_battery(75, 3.9)
+        self.indicator.set_autonomous(True)
+        self.assertEqual(self.indicator.get_status()["indicator_mode"], "autonomous")
+        self.assertEqual(self.indicator.render_frame(0.9), CYAN)
+
+        self.indicator.signal_event("collision", 3.0)
+        self.assertEqual(self.indicator.get_status()["indicator_mode"], "collision")
+        self.assertEqual(self.indicator.render_frame(0.4), ORANGE)
+        self.clock.now = 3.1
+        self.assertEqual(self.indicator.get_status()["indicator_mode"], "autonomous")
+
+    def test_low_battery_overrides_collision_and_autonomy(self):
+        self.indicator.update_battery(75, 3.9)
+        self.indicator.set_autonomous(True)
+        self.indicator.signal_event("collision", 3.0)
+        self.indicator.update_battery(15, 3.55)
+        self.assertEqual(self.indicator.get_status()["indicator_mode"], "low_battery")
 
     def test_close_releases_pixels(self):
         self.indicator.close()

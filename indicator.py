@@ -4,11 +4,17 @@ import math
 import threading
 import time
 
+from i2c_bus import I2C_LOCK
+
 
 OFF = (0, 0, 0)
 RED = (255, 0, 0)
 GREEN = (0, 255, 0)
 PURPLE = (160, 0, 255)
+CYAN = (0, 180, 255)
+ORANGE = (255, 80, 0)
+YELLOW = (255, 210, 0)
+PINK = (255, 40, 140)
 LOW_BATTERY_PCT = 15.0
 CRITICAL_BATTERY_PCT = 5.0
 LOW_BATTERY_V = 3.55
@@ -35,24 +41,27 @@ class NeoSliderPixels:
 
         self._i2c = board.I2C()
         try:
-            seesaw = Seesaw(self._i2c, address)
-            self._pixels = neopixel.NeoPixel(
-                seesaw,
-                14,
-                4,
-                pixel_order=neopixel.GRB,
-            )
-            self._pixels.brightness = brightness
+            with I2C_LOCK:
+                seesaw = Seesaw(self._i2c, address)
+                self._pixels = neopixel.NeoPixel(
+                    seesaw,
+                    14,
+                    4,
+                    pixel_order=neopixel.GRB,
+                )
+                self._pixels.brightness = brightness
         except Exception:
             self._i2c.deinit()
             raise
 
     def fill(self, color: tuple[int, int, int]) -> None:
-        self._pixels.fill(color)
+        with I2C_LOCK:
+            self._pixels.fill(color)
 
     def close(self) -> None:
         self.fill(OFF)
-        self._i2c.deinit()
+        with I2C_LOCK:
+            self._i2c.deinit()
 
 
 class IndicatorController:
@@ -87,6 +96,8 @@ class IndicatorController:
         self._battery_voltage_v = None
         self._startup_until = self._clock() + max(0.0, float(startup_pulse_s))
         self._leases: dict[str, float] = {}
+        self._events: dict[str, tuple[float, float]] = {}
+        self._autonomous = False
         self.ready = False
 
         if not enabled:
@@ -156,6 +167,24 @@ class IndicatorController:
                 self._leases.pop(lease_id, None)
         return self.get_status()
 
+    def set_autonomous(self, active: bool) -> dict:
+        if not isinstance(active, bool):
+            raise ValueError("active must be true or false")
+        with self._lock:
+            self._autonomous = active
+        return self.get_status()
+
+    def signal_event(self, event: str, duration_s: float) -> dict:
+        if event not in {"acknowledgement", "collision", "pet", "tilt"}:
+            raise ValueError("unknown indicator event")
+        duration_s = float(duration_s)
+        if not 0.1 <= duration_s <= 10.0:
+            raise ValueError("duration_s must be between 0.1 and 10 seconds")
+        now = self._clock()
+        with self._lock:
+            self._events[event] = (now, now + duration_s)
+        return self.get_status()
+
     def get_status(self) -> dict:
         now = self._clock()
         with self._lock:
@@ -170,6 +199,11 @@ class IndicatorController:
             lease_id: deadline
             for lease_id, deadline in self._leases.items()
             if deadline > now
+        }
+        self._events = {
+            event: timing
+            for event, timing in self._events.items()
+            if timing[1] > now
         }
         if not self.ready:
             return "unavailable" if self._enabled else "disabled"
@@ -188,8 +222,18 @@ class IndicatorController:
             and low_voltage
         ):
             return "low_battery"
+        if "collision" in self._events:
+            return "collision"
+        if "tilt" in self._events:
+            return "tilt"
+        if "acknowledgement" in self._events:
+            return "acknowledgement"
         if self._leases:
             return "thinking"
+        if "pet" in self._events:
+            return "pet"
+        if self._autonomous:
+            return "autonomous"
         if now < self._startup_until:
             return "startup"
         if self._battery_pct is not None:
@@ -200,7 +244,7 @@ class IndicatorController:
         now = self._clock() if now is None else now
         with self._lock:
             mode = self._mode_unlocked(now)
-            percent = self._battery_pct
+            event_started = self._events.get(mode, (now, now))[0]
 
         if mode == "critical_battery":
             color = RED if now % 1.0 < 0.5 else OFF
@@ -209,6 +253,20 @@ class IndicatorController:
         elif mode == "thinking":
             wave = (math.sin((2.0 * math.pi * now / 1.5) - math.pi / 2.0) + 1.0) / 2.0
             color = scale_color(PURPLE, 0.2 + 0.8 * wave)
+        elif mode == "collision":
+            wave = (math.sin((2.0 * math.pi * now / 0.8) - math.pi / 2.0) + 1.0) / 2.0
+            color = scale_color(ORANGE, 0.2 + 0.8 * wave)
+        elif mode == "tilt":
+            color = YELLOW if now % 0.4 < 0.2 else OFF
+        elif mode == "acknowledgement":
+            elapsed = now - event_started
+            color = GREEN if elapsed < 0.15 or 0.3 <= elapsed < 0.45 else OFF
+        elif mode == "pet":
+            wave = (math.sin((2.0 * math.pi * now / 1.0) - math.pi / 2.0) + 1.0) / 2.0
+            color = scale_color(PINK, 0.2 + 0.8 * wave)
+        elif mode == "autonomous":
+            wave = (math.sin((2.0 * math.pi * now / 1.8) - math.pi / 2.0) + 1.0) / 2.0
+            color = scale_color(CYAN, 0.35 + 0.65 * wave)
         elif mode == "startup":
             wave = (math.sin((2.0 * math.pi * now / 1.5) - math.pi / 2.0) + 1.0) / 2.0
             color = scale_color(GREEN, 0.2 + 0.8 * wave)
@@ -248,3 +306,5 @@ class IndicatorController:
         with self._lock:
             self.ready = False
             self._leases.clear()
+            self._events.clear()
+            self._autonomous = False
