@@ -1,5 +1,6 @@
 """Hardware-free checks for the LumaBot control boundary."""
 
+from pathlib import Path
 import unittest
 
 from daemon import AutonomyUnavailable, LumaBotDaemon, ObstacleSafetyError
@@ -25,6 +26,13 @@ class FakeBattery:
 
     def read(self):
         return {"battery_pct": self.percent, "battery_voltage_v": self.voltage}
+
+
+class FakeCamera:
+    ready = True
+
+    def capture(self):
+        return Path("/tmp/visitor-lx1-test.jpg")
 
 
 class FakeDistance:
@@ -109,10 +117,12 @@ class DaemonTests(unittest.TestCase):
         self.distance = FakeDistance()
         self.motion = FakeMotion()
         self.battery = FakeBattery()
+        self.camera = FakeCamera()
         self.daemon = LumaBotDaemon(
             self.motors,
             self.battery,
             self.indicator,
+            camera=self.camera,
             distance=self.distance,
             motion=self.motion,
             gestures_enabled=True,
@@ -141,6 +151,11 @@ class DaemonTests(unittest.TestCase):
         self.assertEqual(self.indicator.battery_pct, 75.0)
         self.assertEqual(self.indicator.battery_voltage_v, 3.9)
         self.assertTrue(status["indicator_ready"])
+        self.assertTrue(status["camera_ready"])
+
+    def test_camera_capture_is_forwarded(self):
+        result = self.daemon.capture_photo()
+        self.assertEqual(result["filename"], "visitor-lx1-test.jpg")
 
     def test_indicator_activity_is_forwarded(self):
         result = self.daemon.set_indicator_activity("run-a", True, 10)

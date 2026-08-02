@@ -7,6 +7,7 @@ import time
 
 from autonomy import AutonomyController
 from battery import BatteryGauge
+from camera import CameraController
 from daemon_state import RobotStatus
 from distance import DistanceSensor
 from indicator import (
@@ -48,6 +49,7 @@ class LumaBotDaemon:
         battery: BatteryGauge | None = None,
         indicator: IndicatorController | None = None,
         *,
+        camera: CameraController | None = None,
         distance: DistanceSensor | None = None,
         motion: MotionSensor | None = None,
         autonomy: AutonomyController | None = None,
@@ -64,6 +66,8 @@ class LumaBotDaemon:
         self.motors.coast()
         battery_enabled = os.getenv("LUMABOT_BATTERY_ENABLED") == "1"
         self.battery = battery or BatteryGauge(enabled=battery_enabled)
+        camera_enabled = os.getenv("LUMABOT_CAMERA_ENABLED") == "1"
+        self.camera = camera or CameraController(enabled=camera_enabled)
         indicator_enabled = os.getenv("LUMABOT_INDICATOR_ENABLED") == "1"
         self.indicator = indicator or IndicatorController(
             self.battery,
@@ -81,6 +85,7 @@ class LumaBotDaemon:
         )
         self.status = RobotStatus(
             motors_ready=self.motors.ready,
+            camera_ready=self.camera.ready,
             distance_ready=self.distance.ready,
             motion_ready=self.motion.ready,
         )
@@ -174,6 +179,10 @@ class LumaBotDaemon:
 
     def set_indicator_activity(self, lease_id: str, active: bool, ttl_s: float) -> dict:
         return self.indicator.set_activity(lease_id, active, ttl_s)
+
+    def capture_photo(self) -> dict:
+        path = self.camera.capture()
+        return {"filename": path.name, "path": str(path)}
 
     def close(self) -> None:
         self._stop_event.set()

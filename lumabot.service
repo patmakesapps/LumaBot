@@ -9,6 +9,7 @@ User=lumabot21
 WorkingDirectory=/home/lumabot21/lumabot
 Environment=LUMABOT_MOTORS_ENABLED=1
 Environment=LUMABOT_BATTERY_ENABLED=1
+Environment=LUMABOT_CAMERA_ENABLED=1
 Environment=LUMABOT_INDICATOR_ENABLED=1
 Environment=LUMABOT_DISTANCE_ENABLED=1
 Environment=LUMABOT_MOTION_ENABLED=1

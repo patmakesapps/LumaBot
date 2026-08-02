@@ -1,8 +1,10 @@
 """Local HTTP API for the LumaBot hardware daemon."""
 
 import json
+import subprocess
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
+from camera import CameraBusy, CameraUnavailable
 from daemon import AutonomyUnavailable, LumaBotDaemon, ObstacleSafetyError
 from motors import MotorsNotReady
 
@@ -35,6 +37,18 @@ class RequestHandler(BaseHTTPRequestHandler):
     def do_POST(self) -> None:
         if self.path == "/stop":
             self._send_json(200, {"stopped": True, "status": DAEMON.stop()})
+            return
+        if self.path == "/camera/capture":
+            try:
+                result = DAEMON.capture_photo()
+            except CameraBusy as error:
+                self._send_json(409, {"error": str(error)})
+            except CameraUnavailable as error:
+                self._send_json(503, {"error": str(error)})
+            except (OSError, subprocess.SubprocessError):
+                self._send_json(502, {"error": "camera capture failed"})
+            else:
+                self._send_json(201, {"captured": True, **result})
             return
         if self.path == "/indicator/activity":
             try:
