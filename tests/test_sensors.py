@@ -61,6 +61,7 @@ class SensorTests(unittest.TestCase):
         self.assertTrue(first["motion_ready"])
         self.assertEqual(first["tilt_degrees"], 0.0)
         self.assertEqual(device.tap_settings["tap_count"], 2)
+        self.assertEqual(device.tap_settings["threshold"], 8)
 
         device.acceleration = (9.806, 0.0, 0.0)
         device.tapped = True

@@ -9,6 +9,7 @@ from i2c_bus import I2C_LOCK
 
 
 STANDARD_GRAVITY = 9.806
+DOUBLE_TAP_THRESHOLD = 8
 
 
 class MotionSensor:
@@ -37,7 +38,7 @@ class MotionSensor:
                 self._device = adafruit_msa3xx.MSA311(self._i2c)
                 self._device.enable_tap_detection(
                     tap_count=2,
-                    threshold=25,
+                    threshold=DOUBLE_TAP_THRESHOLD,
                     double_tap_window=adafruit_msa3xx.TapDuration.DURATION_700_MS,
                 )
             self.ready = True
@@ -49,7 +50,7 @@ class MotionSensor:
         with I2C_LOCK:
             self._device.enable_tap_detection(
                 tap_count=2,
-                threshold=25,
+                threshold=DOUBLE_TAP_THRESHOLD,
                 double_tap_window=7,
             )
 

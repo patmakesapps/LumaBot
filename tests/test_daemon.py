@@ -3,7 +3,7 @@
 from pathlib import Path
 import unittest
 
-from daemon import AutonomyUnavailable, LumaBotDaemon, ObstacleSafetyError
+from daemon import CONTROL_INTERVAL_S, AutonomyUnavailable, LumaBotDaemon, ObstacleSafetyError
 
 
 class FakeMotors:
@@ -111,6 +111,9 @@ class FakeIndicator:
 
 
 class DaemonTests(unittest.TestCase):
+    def test_control_loop_can_observe_short_tap_interrupt(self):
+        self.assertLessEqual(CONTROL_INTERVAL_S, 0.0125)
+
     def setUp(self):
         self.motors = FakeMotors()
         self.indicator = FakeIndicator()
