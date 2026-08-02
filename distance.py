@@ -8,6 +8,11 @@ import time
 from i2c_bus import I2C_LOCK
 
 
+RANGE_STATUS_REGISTER = 0x0089
+NO_TARGET_RAW_STATUS = 4
+NO_TARGET_DISTANCE_MM = 4000
+
+
 class DistanceSensor:
     STALE_S = 0.35
 
@@ -63,9 +68,15 @@ class DistanceSensor:
                     with I2C_LOCK:
                         if self._device.data_ready:
                             distance_cm = self._device.distance
+                            range_status = self._device._read_register(
+                                RANGE_STATUS_REGISTER
+                            )[0] & 0x1F
                             self._device.clear_interrupt()
                             if distance_cm is not None:
                                 self._distance_mm = int(round(float(distance_cm) * 10.0))
+                                self._measured_at = now
+                            elif range_status == NO_TARGET_RAW_STATUS:
+                                self._distance_mm = NO_TARGET_DISTANCE_MM
                                 self._measured_at = now
                 except Exception as error:
                     print(f"VL53L1X read failed: {error}", flush=True)

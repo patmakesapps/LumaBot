@@ -6,8 +6,8 @@ on Wi-Fi, an LLM response, or LumaKit remaining connected.
 ## Controls
 
 - Double-tap the MSA311 to start autonomous driving.
-- Double-tap again, call `POST /stop`, issue a manual drive command, or use
-  LumaKit's STOP action to cancel it.
+- Double-tap firmly again, call `POST /stop`, issue a manual drive command, or
+  use LumaKit's STOP action to cancel it.
 - LumaKit can start autonomy with its owner-only, approval-gated
   `lumabot_start_autonomy` tool.
 

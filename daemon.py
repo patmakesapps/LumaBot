@@ -30,6 +30,11 @@ CONTROL_INTERVAL_S = 0.01
 BATTERY_POLL_S = 10.0
 COLLISION_DYNAMIC_G = 1.0
 PET_DYNAMIC_G = 0.3
+TAP_DYNAMIC_G = 0.35
+STOP_TAP_DYNAMIC_G = 1.5
+TAP_RELEASE_G = 0.15
+DOUBLE_TAP_MIN_S = 0.10
+DOUBLE_TAP_MAX_S = 0.70
 TILT_STOP_DEGREES = 55.0
 TILT_RESET_DEGREES = 45.0
 
@@ -95,6 +100,9 @@ class LumaBotDaemon:
         self._control_thread = None
         self._next_battery_poll = 0.0
         self._tap_cooldown_until = 0.0
+        self._tap_started_at = None
+        self._tap_active = False
+        self._hardware_tap_armed = True
         self._pet_cooldown_until = 0.0
         self._tilt_samples = 0
 
@@ -218,6 +226,7 @@ class LumaBotDaemon:
             self._next_battery_poll = now + BATTERY_POLL_S
 
         with self._lock:
+            self._merge_double_tap_unlocked(motion, now)
             self._apply_distance_unlocked(distance)
             self._apply_motion_unlocked(motion)
             if battery is not None:
@@ -254,6 +263,39 @@ class LumaBotDaemon:
                 or distance["distance_mm"] <= AutonomyController.STOP_DISTANCE_MM
             ):
                 self._stop_motion_unlocked("front_obstacle")
+
+    def _merge_double_tap_unlocked(self, motion: dict, now: float) -> None:
+        hardware_tap = motion["double_tap"]
+        software_tap = self._detect_double_tap_unlocked(motion, now)
+        if self.autonomy.active:
+            if hardware_tap:
+                self._hardware_tap_armed = False
+            motion["double_tap"] = software_tap
+            return
+        if not hardware_tap:
+            self._hardware_tap_armed = True
+        accepted_hardware_tap = hardware_tap and self._hardware_tap_armed
+        motion["double_tap"] = software_tap or accepted_hardware_tap
+        if accepted_hardware_tap:
+            self._hardware_tap_armed = False
+
+    def _detect_double_tap_unlocked(self, motion: dict, now: float) -> bool:
+        impact = motion["dynamic_acceleration_g"]
+        if not isinstance(impact, (int, float)):
+            return False
+        if impact <= TAP_RELEASE_G:
+            self._tap_active = False
+            return False
+        threshold = STOP_TAP_DYNAMIC_G if self.autonomy.active else TAP_DYNAMIC_G
+        if impact < threshold or self._tap_active:
+            return False
+        self._tap_active = True
+        elapsed = None if self._tap_started_at is None else now - self._tap_started_at
+        if elapsed is None or not DOUBLE_TAP_MIN_S <= elapsed <= DOUBLE_TAP_MAX_S:
+            self._tap_started_at = now
+            return False
+        self._tap_started_at = None
+        return True
 
     def _handle_double_tap_unlocked(self, motion: dict, now: float) -> bool:
         if (
@@ -344,6 +386,7 @@ class LumaBotDaemon:
         self.status.autonomous = True
         self.status.autonomy_source = source
         self.status.autonomy_blocked_reason = None
+        self.status.last_stop_reason = None
         self.status.mode = "autonomous"
         self.status.brain_state = self.autonomy.state
         self.status.left = self.status.right = 0.0
@@ -361,10 +404,7 @@ class LumaBotDaemon:
             return "battery status is unavailable"
         if self._battery_is_low_unlocked():
             return "battery is too low for autonomous driving"
-        if (
-            isinstance(self.status.tilt_degrees, (int, float))
-            and self.status.tilt_degrees >= TILT_STOP_DEGREES
-        ):
+        if self._tilt_samples >= 3:
             return "robot is tilted"
         return None
 
@@ -377,6 +417,8 @@ class LumaBotDaemon:
         self.indicator.set_autonomous(False)
 
     def _stop_motion_unlocked(self, reason: str) -> None:
+        self.status.last_stop_reason = reason
+        self.status.last_stop_at = datetime.now(timezone.utc).isoformat()
         if self._stop_timer:
             self._stop_timer.cancel()
             self._stop_timer = None

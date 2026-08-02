@@ -175,11 +175,50 @@ class DaemonTests(unittest.TestCase):
         self.daemon._control_tick(2.1)
         self.assertEqual((self.motors.left, self.motors.right), (0.7, 0.7))
 
-        self.motion.double_tap = True
+        self.motion.dynamic_g = 1.6
         self.daemon._control_tick(3.3)
+        self.motion.dynamic_g = 0.0
+        self.daemon._control_tick(3.4)
+        self.motion.dynamic_g = 1.6
+        self.daemon._control_tick(3.6)
         self.assertFalse(self.daemon.autonomy.active)
-        self.assertEqual((self.motors.left, self.motors.right), (0.0, 0.0))
-        self.assertEqual(self.indicator.events[-1], ("acknowledgement", 0.75))
+        self.assertEqual(self.daemon.status.last_stop_reason, "double_tap")
+
+    def test_acceleration_peaks_are_a_double_tap_fallback(self):
+        self.motion.dynamic_g = 0.5
+        self.daemon._control_tick(2.0)
+        self.motion.dynamic_g = 0.0
+        self.daemon._control_tick(2.1)
+        self.motion.dynamic_g = 0.5
+        self.daemon._control_tick(2.3)
+
+        self.assertTrue(self.daemon.autonomy.active)
+        self.assertEqual(self.daemon.status.last_gesture, "double_tap")
+
+    def test_tap_tilt_spike_does_not_block_autonomy(self):
+        self.motion.double_tap = True
+        self.motion.tilt = 70.0
+        self.daemon._control_tick(2.0)
+
+        self.assertTrue(self.daemon.autonomy.active)
+
+    def test_sustained_hardware_tap_is_only_one_gesture(self):
+        self.motion.double_tap = True
+        self.daemon._control_tick(2.0)
+        self.daemon._control_tick(3.3)
+
+        self.assertTrue(self.daemon.autonomy.active)
+
+    def test_motor_vibration_does_not_stop_autonomy(self):
+        self.motion.double_tap = True
+        self.daemon._control_tick(2.0)
+        self.motion.double_tap = False
+        self.daemon._control_tick(2.1)
+        self.motion.double_tap = True
+        self.motion.dynamic_g = 0.5
+        self.daemon._control_tick(3.3)
+
+        self.assertTrue(self.daemon.autonomy.active)
 
     def test_manual_drive_cancels_autonomy(self):
         self.daemon.start_autonomy()

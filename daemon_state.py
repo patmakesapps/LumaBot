@@ -25,6 +25,8 @@ class RobotStatus:
     last_collision_at: str | None = None
     last_collision_g: float | None = None
     last_gesture: str | None = None
+    last_stop_reason: str | None = None
+    last_stop_at: str | None = None
     battery_pct: float | None = None
     battery_voltage_v: float | None = None
     battery_ready: bool = False

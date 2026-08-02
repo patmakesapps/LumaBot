@@ -10,6 +10,7 @@ class FakeDistanceDevice:
     def __init__(self):
         self.data_ready = True
         self.distance = 42.3
+        self.range_status = 9
         self.started = False
         self.stopped = False
         self.cleared = 0
@@ -22,6 +23,10 @@ class FakeDistanceDevice:
 
     def clear_interrupt(self):
         self.cleared += 1
+
+    def _read_register(self, register):
+        self.assert_range_status_register = register
+        return bytes((self.range_status,))
 
 
 class FakeMotionDevice:
@@ -52,6 +57,15 @@ class SensorTests(unittest.TestCase):
         self.assertFalse(reading["distance_fresh"])
         sensor.close()
         self.assertTrue(device.stopped)
+
+    def test_no_target_is_fresh_clear_space(self):
+        device = FakeDistanceDevice()
+        device.distance = None
+        device.range_status = 4
+        reading = DistanceSensor(device=device).sample(1.0)
+
+        self.assertEqual(reading["distance_mm"], 4000)
+        self.assertTrue(reading["distance_fresh"])
 
     def test_motion_reports_double_tap_impact_and_tilt(self):
         device = FakeMotionDevice()
