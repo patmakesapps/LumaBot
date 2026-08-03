@@ -26,6 +26,38 @@ space remains measurable while the stale-reading safety stop stays active.
 - A turn does not return to cruise until the sensor sees at least 520 mm of
   clearance.
 
+## Corner escape (sweep-and-commit)
+
+When the robot keeps hitting obstacles (a third recovery inside ten seconds,
+or an escalated collision), it stops guessing and scans instead:
+
+1. **Sweep**: pivot in place at 55% for four seconds while recording the
+   distance profile — the robot uses its own rotation as a poor man's lidar.
+2. **Score**: find the direction with the most *sustained* clearance using a
+   0.25 s sliding window. Readings at 3900 mm or more are treated as the
+   daemon's synthetic "no target" value and scored as barely-clear rather
+   than open floor, so a glass door or dark sofa cannot lure the robot.
+3. **Commit**: rotate back to the best direction (time-symmetric backtrack at
+   the same pivot speed, so no heading sensor is needed) and drive out. The
+   aimed exit trusts the sweep: if the chosen direction reads under 520 mm
+   the robot still creeps toward it at approach speed, because in tight
+   pockets the best available exit is often below the open-floor threshold.
+
+The controller also keeps a short episode memory. It integrates commanded
+wheel differential into a rough heading estimate (`TURN_RATE_RAD_S`, worth
+calibrating with a timed pivot on hardware), and directions whose aimed
+escape immediately led to another recovery are penalized for 30 seconds so
+the robot stops re-trying the deepest-looking dead end. Five seconds of free
+cruising clears the memory. If an episode drags past six recoveries, every
+third recovery falls back to an old-style random turn so the robot never
+mills in place indefinitely; `episode_recoveries` exposes how stuck it is,
+which is the intended trigger for asking LumaKit's camera brain for help.
+
+Escape behavior is regression-tested headlessly in `tests/test_autonomy_sim.py`
+against `simulation/world.py`, which models the VL53L1X's 27-degree cone,
+10 Hz refresh, gaussian noise, grazing-angle dropout, and slight motor
+asymmetry. Watch it live with `python simulation/sim_autonomy.py`.
+
 A single forward-facing distance sensor cannot see behind or beside the robot.
 The first physical test must therefore use a clear floor with a reachable STOP
 control and no stairs, table edges, pets, feet, or fragile objects nearby.
