@@ -38,15 +38,15 @@ mid-command.
 <td width="50%"><img src="docs/images/three-quarter.jpg" alt="VISITOR LX-1 three-quarter view showing the drive wheel and side access slot" width="100%"></td>
 </tr>
 <tr>
-<td align="center"><sub><b>Front.</b> Vent, NoIR camera, and the VL53L1X behind its cutout.</sub></td>
-<td align="center"><sub><b>Three-quarter.</b> Printed shell over the purple chassis plate.</sub></td>
+<td align="center"><sub><b>Front.</b> Vent, NoIR camera, and the VL53L1X behind its cutout, with the caster below.</sub></td>
+<td align="center"><sub><b>Three-quarter.</b> Driven wheels at the rear, printed shell over the purple chassis plate.</sub></td>
 </tr>
 </table>
 
 | Part | Role |
 |---|---|
 | Raspberry Pi 5 | Runs the daemon (plus LumaKit on the same board) |
-| 2× N20 gear motors + Adafruit Motor Bonnet (`0x60`) | Differential drive, rear caster |
+| 2× N20 gear motors + Adafruit Motor Bonnet (`0x60`) | Differential drive, front caster |
 | VL53L1X time-of-flight sensor (`0x29`) | Forward distance, ~27° cone, 10 Hz |
 | MSA311 accelerometer | Tilt safety, collision detection, double-tap gesture |
 | X1200 UPS + MAX17040 gauge (`0x36`) | Battery monitoring; motors run on a separate 6 V pack |
@@ -87,7 +87,7 @@ tests/        unittest suite; daemon tests require Pi-only smbus2
 | GET | `/status` | Full robot status snapshot |
 | POST | `/drive` | One leased move: `{direction, speed, duration_s}` (max 3 s — callers renew) |
 | POST | `/stop` | Stop motors, cancel autonomy |
-| POST | `/autonomy` | Start autonomous driving (only when every readiness check passes) |
+| POST | `/autonomy` | `{active}` — start autonomous driving (only when every readiness check passes) or stop it |
 | POST | `/camera/capture` | Take one still photo |
 | POST | `/indicator/activity` | LumaKit's "thinking" LED lease |
 
@@ -110,7 +110,10 @@ reference: [docs/autonomy.md](docs/autonomy.md).
 Safety invariants, always: a missing or stale distance reading produces zero
 motor output; control-loop errors and daemon shutdown coast the motors; tilt
 ≥55° stops motion; a ≥1 g impact triggers escalated recovery; double-tap the
-chassis to toggle autonomy by hand.
+chassis to toggle autonomy by hand — gently (0.35 g) to start, but a firm
+1.5 g double-tap to stop a run in progress, so a bump can't be mistaken for a
+command. A single soft pat between 0.3 g and 1 g isn't a command at all: it
+registers as a **pet** and gets its own LED reaction.
 
 ## Simulation
 
