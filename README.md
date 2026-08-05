@@ -1,11 +1,29 @@
+<div align="center">
+
+<img src="docs/images/hero.jpg" alt="VISITOR LX-1 Builders Edition robot" width="820">
+
 # LumaBot
 
-The onboard software for the **VISITOR LX-1 Builders Edition** robot
-([lumalien.com](https://lumalien.com)). LumaBot is the robot's hardware
-daemon: it owns the motors, sensors, LEDs, and camera on a Raspberry Pi 5,
-runs all safety-critical behavior locally, and exposes a small loopback HTTP
-API that [LumaKit](https://github.com/patmakesapps/LumaKit) — the LLM agent —
-drives to give the robot a mind.
+**The onboard brainstem of the VISITOR LX-1 Builders Edition.**<br>
+Motors, sensors, LEDs, and camera on a Raspberry Pi 5 — with every reflex
+running locally, whether or not the network is there.
+
+[![Raspberry Pi 5](https://img.shields.io/badge/Raspberry%20Pi-5-C51A4A?logo=raspberrypi&logoColor=white)](https://www.raspberrypi.com/products/raspberry-pi-5/)
+[![Python 3](https://img.shields.io/badge/Python-3-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+![Control loop 100 Hz](https://img.shields.io/badge/control%20loop-100%20Hz-7C3AED)
+![Hardware-free sim](https://img.shields.io/badge/sim-hardware--free-7C3AED)
+[![lumalien.com](https://img.shields.io/badge/lumalien.com-visit-7C3AED?logo=googlechrome&logoColor=white)](https://lumalien.com)
+
+</div>
+
+---
+
+LumaBot is the hardware daemon for the **VISITOR LX-1 Builders Edition**
+([lumalien.com](https://lumalien.com)). It owns the motors, sensors, LEDs, and
+camera on a Raspberry Pi 5, runs all safety-critical behavior locally, and
+exposes a small loopback HTTP API that
+[LumaKit](https://github.com/patmakesapps/LumaKit) — the LLM agent — drives to
+give the robot a mind.
 
 The split is deliberate: **reflexes live here and never depend on Wi-Fi or a
 model response.** Obstacle stops, watchdog timeouts, tilt cutoffs, collision
@@ -13,6 +31,17 @@ recovery, and battery gates all run in this daemon even if LumaKit dies
 mid-command.
 
 ## Hardware
+
+<table>
+<tr>
+<td width="50%"><img src="docs/images/front-view.jpg" alt="VISITOR LX-1 front view: intake vent, NoIR camera, VL53L1X sensor" width="100%"></td>
+<td width="50%"><img src="docs/images/three-quarter.jpg" alt="VISITOR LX-1 three-quarter view showing the drive wheel and side access slot" width="100%"></td>
+</tr>
+<tr>
+<td align="center"><sub><b>Front.</b> Vent, NoIR camera, and the VL53L1X behind its cutout.</sub></td>
+<td align="center"><sub><b>Three-quarter.</b> Printed shell over the purple chassis plate.</sub></td>
+</tr>
+</table>
 
 | Part | Role |
 |---|---|
@@ -26,6 +55,17 @@ mid-command.
 
 Everything shares I2C bus 1; `i2c_bus.py` serializes access with one global
 lock.
+
+<table>
+<tr>
+<td width="50%"><img src="docs/images/sensor-stack.jpg" alt="Close-up of the NoIR camera and VL53L1X mounted in the front panel" width="100%"></td>
+<td width="50%"><img src="docs/images/distance-sensor.jpg" alt="Close-up of the VL53L1X time-of-flight breakout and its I2C harness" width="100%"></td>
+</tr>
+<tr>
+<td align="center"><sub>The sensing face: camera and time-of-flight side by side.</sub></td>
+<td align="center"><sub>VL53L1X on I2C — the reading every safety stop depends on.</sub></td>
+</tr>
+</table>
 
 ## Architecture
 
@@ -96,6 +136,11 @@ which imports Pi-only `smbus2` — run the full suite on the Pi. One LumaKit-sid
 photo test likewise asserts POSIX file modes and only passes on Linux.
 
 ## Deploy (Raspberry Pi)
+
+<img src="docs/images/enclosure.jpg" alt="Rear of the VISITOR LX-1 enclosure exposing the Raspberry Pi 5 Ethernet and USB ports" width="100%">
+
+<sub>The rear cutout leaves the Pi 5's Ethernet and USB ports reachable — you can
+flash, wire, and debug without opening the shell.</sub>
 
 ```bash
 cd /home/lumabot21/lumabot
